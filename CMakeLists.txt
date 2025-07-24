@@ -10,7 +10,8 @@ add_executable(untitled main.cpp
         proto/Image.h
         proto/proto.h
         proto/Types.cpp
-        proto/Types.h)
+        proto/Types.h
+        proto/Transform.h)
 
 find_package(SDL2 CONFIG REQUIRED)
 target_link_libraries(untitled

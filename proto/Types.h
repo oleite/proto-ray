@@ -1,6 +1,6 @@
 #pragma once
 #include <SDL_stdinc.h>
-#include <array>
+#include <vector>
 
 struct Vector3
 {
@@ -60,6 +60,11 @@ struct Ray
 {
     Vector3 origin;
     Vector3 direction;
+
+    Ray(const Vector3 &o, const Vector3 &d)
+        : origin{o}
+        , direction{normalize(d)}
+    {}
 };
 
 struct Bounds3
@@ -74,15 +79,6 @@ struct Bounds3
         return p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y && p.z >= min.z
                && p.z <= max.z;
     }
-};
-
-struct Matrix4
-{
-    std::array<double, 16> m;
-
-    inline constexpr Matrix4()
-        : m{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
-    {}
 };
 
 struct Color
@@ -108,7 +104,7 @@ struct Color
         , a{1.0}
     {}
 
-    inline constexpr Uint32 convert() const
+    inline Uint32 convert() const
     {
         auto red = static_cast<unsigned char>(r * 255.0);
         auto green = static_cast<unsigned char>(g * 255.0);
@@ -116,29 +112,64 @@ struct Color
         auto alpha = static_cast<unsigned char>(a * 255.0);
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-        Uint32 pixelColor = (red << 24) + (green << 16) + (blue << 8) + alpha;
+        Uint32 pixelColor = (alpha << 24) | (blue << 16) | (green << 8) | red;
 #else
-        Uint32 pixelColor = (alpha << 24) + (blue << 16) + (green << 8) + red;
+        Uint32 pixelColor = (blue << 0) | (green << 8) | (red << 16) | (alpha << 24);
 #endif
 
         return pixelColor;
+    }
+
+    Color operator*(const double val) const
+    {
+        return {r * val, g * val, b * val, a};
     }
 };
 
 struct Intersection
 {
-    bool hit;
-    Vector3 position;
-    Vector3 normal;
-    double distance;
+    bool hit{false};
+    Vector3 position{INFINITY, INFINITY, INFINITY};
+    Vector3 normal{INFINITY, INFINITY, INFINITY};
+    double distance{INFINITY};
+    double u{INFINITY};
+    double v{INFINITY};
 };
 
 class Primitive
 {
 public:
-    Intersection intersect(const Ray &r) const;
-    bool intersectP(const Ray &r) const;
-    Bounds3 bounds() const;
+    virtual ~Primitive() = default;
+    virtual Intersection intersect(const Ray &r) const = 0;
+    virtual bool intersectP(const Ray &r) const = 0;
+    // virtual Bounds3 bounds() const = 0;
+};
+
+class Aggregate : public Primitive
+{
+public:
+    std::vector<std::shared_ptr<Primitive>> primitives;
+
+    bool intersectP(const Ray &r) const override
+    {
+        for (const auto &prim : primitives)
+        {
+            if (prim->intersectP(r))
+                return true;
+        }
+        return false;
+    }
+
+    Intersection intersect(const Ray &r) const override
+    {
+        Intersection result;
+        for (const auto &prim : primitives) {
+            Intersection i = prim->intersect(r);
+            if (i.hit && i.distance < result.distance)
+                result = i;
+        }
+        return result;
+    }
 };
 
 class Sphere : public Primitive
@@ -152,27 +183,27 @@ public:
         , radius{radius}
     {}
 
-    bool intersectP(const Ray &r) const
+    bool intersectP(const Ray &r) const override
     {
         const Vector3 A = r.origin - center;
         const Vector3 D = r.direction;
 
         const double a = dot(D, D);
         const double b = 2.0 * dot(A, D);
-        const double c = dot(A, A) + radius * radius;
+        const double c = dot(A, A) - radius * radius;
         const double discriminant = b * b - 4 * a * c;
 
         return discriminant >= 0;
     }
 
-    Intersection intersect(const Ray &r) const
+    Intersection intersect(const Ray &r) const override
     {
         const Vector3 A = r.origin - center;
         const Vector3 D = r.direction;
 
         const double a = dot(D, D);
         const double b = 2.0 * dot(A, D);
-        const double c = dot(A, A) + radius * radius;
+        const double c = dot(A, A) - radius * radius;
         const double discriminant = b * b - 4 * a * c;
 
         Intersection result;
@@ -183,9 +214,11 @@ public:
         }
 
         result.hit = true;
-        result.distance = (-b - discriminant) / 2.0 * a;
+        result.distance = (-b - sqrt(discriminant)) / 2.0 * a;
         result.position = r.origin + r.direction * result.distance;
         result.normal = normalize(result.position - center);
+        result.u = 0.5 + atan2(result.normal.z, result.normal.x) / (2.0 * M_PI);
+        result.v = 0.5 - asin(result.normal.y) / M_PI;
 
         return result;
     }

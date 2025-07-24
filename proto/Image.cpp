@@ -4,42 +4,20 @@
 
 #include "Image.h"
 
-Image::Image()
+
+
+
+
+void Image::display() const
 {
-    m_width = 0;
-    m_height = 0;
-    m_pTexture = nullptr;
-}
+    SDL_UpdateTexture(m_pTexture, nullptr, m_pixels.data(), width * sizeof(Uint32));
 
-Image::~Image()
-{
-    if (m_pTexture != nullptr)
-        SDL_DestroyTexture(m_pTexture);
-}
-
-void Image::Initialize(const int width, const int height, SDL_Renderer *pRenderer)
-{
-    m_width = width;
-    m_height = height;
-
-    m_pixels.resize(m_width * m_height);
-
-    m_pRenderer = pRenderer;
-
-    InitTexture();
-}
-
-
-void Image::Display()
-{
-    SDL_UpdateTexture(m_pTexture, nullptr, m_pixels.data(), m_width * sizeof(Uint32));
-
-    const SDL_Rect rect = {0, 0, m_width, m_height};
+    const SDL_Rect rect = {0, 0, width, height};
     SDL_RenderCopy(m_pRenderer, m_pTexture, &rect, &rect);
 }
 
 
-void Image::InitTexture()
+void Image::initTexture()
 {
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     const Uint32 rmask = 0xff000000;
@@ -56,7 +34,7 @@ void Image::InitTexture()
     if (m_pTexture != nullptr)
         SDL_DestroyTexture(m_pTexture);
 
-    SDL_Surface *tempSurface = SDL_CreateRGBSurface(0, m_width, m_height, 32, rmask, gmask, bmask, amask);
+    SDL_Surface *tempSurface = SDL_CreateRGBSurface(0, width, height, 32, rmask, gmask, bmask, amask);
     m_pTexture = SDL_CreateTextureFromSurface(m_pRenderer, tempSurface);
     SDL_FreeSurface(tempSurface);
 }
